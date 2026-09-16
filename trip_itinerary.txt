@@ -1,0 +1,34 @@
+=============================================
+                      TRIPCRAFT
+=============================================
+Destination: Paris
+Duration: 3 days
+Budget: $500.00
+Created: 2026-09-16
+
+DAY 1
+---------------------------------------------
+- Visit a historical landmark - $25.00
+- Explore a museum - $20.00
+- Food estimate - $30.00
+- Transport estimate - $10.00
+
+DAY 2
+---------------------------------------------
+- Visit an old town or heritage area - $15.00
+- Try a traditional local meal - $30.00
+- Food estimate - $30.00
+- Transport estimate - $10.00
+
+DAY 3
+---------------------------------------------
+- Explore a local food market - $15.00
+- Visit a popular café - $12.00
+- Food estimate - $30.00
+- Transport estimate - $10.00
+
+=============================================
+Estimated total: $237.00
+Remaining budget: $263.00
+Status: Within budget
+=============================================
