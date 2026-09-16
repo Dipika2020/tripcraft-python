@@ -1,9 +1,9 @@
 =============================================
                       TRIPCRAFT
 =============================================
-Destination: Paris
-Duration: 3 days
-Budget: $500.00
+Destination: Toronto
+Duration: 2 days
+Budget: $200.00
 Created: 2026-09-16
 
 DAY 1
@@ -20,15 +20,8 @@ DAY 2
 - Food estimate - $30.00
 - Transport estimate - $10.00
 
-DAY 3
----------------------------------------------
-- Explore a local food market - $15.00
-- Visit a popular café - $12.00
-- Food estimate - $30.00
-- Transport estimate - $10.00
-
 =============================================
-Estimated total: $237.00
-Remaining budget: $263.00
+Estimated total: $170.00
+Remaining budget: $30.00
 Status: Within budget
 =============================================
