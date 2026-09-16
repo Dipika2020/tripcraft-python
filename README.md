@@ -29,6 +29,7 @@ The application then generates a day-by-day itinerary, estimates the total cost,
 - 🎯 Customize activities based on interests
 - 📊 Calculate the estimated trip cost
 - 💵 Display remaining budget or amount over budget
+- ⚠️ Show a warning when the estimated cost exceeds the budget
 - 📄 Save the itinerary as a text file
 - ✅ Validate user inputs
 - 🐍 Built using Python's standard library
@@ -182,6 +183,8 @@ Generate Daily Itinerary
     ↓
 Calculate Estimated Costs
     ↓
+Compare Cost with Budget
+    ↓
 Display Budget Summary
     ↓
 Save Itinerary to Text File
@@ -194,6 +197,7 @@ Save Itinerary to Text File
 This is the first version of TripCraft.
 
 - Activities are based on predefined sample data.
+- Budget calculations use predefined estimated costs.
 - Prices are estimates and are not live prices.
 - The application currently runs in the terminal.
 - Flights, hotels, and live travel APIs are not included.
