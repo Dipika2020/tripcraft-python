@@ -66,13 +66,29 @@ def select_activities(interests, days):
         selected_activities = [
             ("Explore the city", 15),
             ("Visit a popular attraction", 25),
-            ("Try a local food", 30),
+            ("Try local food", 30),
         ]
 
     return [
         selected_activities[index % len(selected_activities)]
         for index in range(days * 2)
     ]
+
+# budget-handling func
+def get_budget_status(budget, estimated_total):
+    difference = budget - estimated_total
+
+    if difference >= 0:
+        return (
+            f"Remaining budget: ${difference:.2f}\n"
+            "Status: Within budget"
+        )
+
+    return (
+        f"Over budget by: ${abs(difference):.2f}\n"
+        "Status: Consider reducing activities"
+    )
+
 
 def generate_itinerary(destination, days, budget, interests):
     activities = select_activities(interests, days)
@@ -119,19 +135,34 @@ def generate_itinerary(destination, days, budget, interests):
     lines.append("=" * 45)
     lines.append(f"Estimated total: ${estimated_total:.2f}")
 
-    remaining_budget = budget - estimated_total
+        # remaining_budget = budget - estimated_total
 
-    if remaining_budget >= 0:
-        lines.append(f"Remaining budget: ${remaining_budget:.2f}")
-        lines.append("Status: Within budget")
+        # if remaining_budget >= 0:
+        #     lines.append(f"Remaining budget: ${remaining_budget:.2f}")
+        #     lines.append("Status: Within budget")
 
-    else:
-        lines.append(f"over budget by: ${abs(remaining_budget):.2f}")
-        lines.append("Status: Consider reducing activities")
+        # else:
+        #     lines.append(f"over budget by: ${abs(remaining_budget):.2f}")
+        #     lines.append("Status: Consider reducing activities")
+    
+    budget_status = get_budget_status(budget, estimated_total)
+
+    for line in budget_status.split("\n"):
+        lines.append(line)
+    #budget warning feature
+    if estimated_total > budget:
+        lines.append("")
+        lines.append("💡 Tip: Try selecting fewer paid activities.")
 
     lines.append("=" * 45)
 
     return "\n".join(lines)
+
+def show_menu():
+    print("\n========== TRIPCRAFT ==========")
+    print("1. Create a new itinerary")
+    print("2. View supported interests")
+    print("3. Exit")
 
 def save_itinerary(itinerary):
     filename = "trip_itinerary.txt"
