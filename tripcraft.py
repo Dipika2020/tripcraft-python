@@ -163,6 +163,13 @@ def show_menu():
     print("1. Create a new itinerary")
     print("2. View supported interests")
     print("3. Exit")
+    print("=" * 32)
+
+def show_supported_interests():
+    print("\nSupported interests:")
+
+    for interest in ACTIVITIES:
+        print(f" - {interest.title()}")
 
 def save_itinerary(itinerary):
     filename = "trip_itinerary.txt"
@@ -172,12 +179,15 @@ def save_itinerary(itinerary):
 
     print(f"\nYour itinerary was saved to {filename}")
 
-def main():
-    print("\nWelcome to TripCraft!\n")
+def create_itinerary():
+    destination = input('\nEnter your destination: ').strip()
 
-    destination = input("Enter your destination: ").strip()
-    days = get_positive_integer("How many days is your trip? ")
-    budget = get_positive_float("What is your budget in CAD? ")
+    days = get_positive_integer(
+        "How many days is your trip? "
+    )
+    budget = get_positive_float(
+        "What is your budget in CAD? "
+    )
 
     interests_input = input(
         "Enter your interests separated by commas "
@@ -190,7 +200,7 @@ def main():
     ]
 
     itinerary = generate_itinerary(
-        destination, 
+        destination,
         days,
         budget,
         interests,
@@ -205,6 +215,58 @@ def main():
 
     if save_choice in ["yes", "y"]:
         save_itinerary(itinerary)
+
+def main():
+    print("\nWelcome to TripCraft!\n")
+
+    # destination = input("Enter your destination: ").strip()
+    # days = get_positive_integer("How many days is your trip? ")
+    # budget = get_positive_float("What is your budget in CAD? ")
+
+    # interests_input = input(
+    #     "Enter your interests separated by commas "
+    #     "(history, food, nature, shopping, culture): "
+    # )
+
+    # interests = [
+    #     interest.strip().lower()
+    #     for interest in interests_input.split(",")
+    # ]
+
+    # itinerary = generate_itinerary(
+    #     destination, 
+    #     days,
+    #     budget,
+    #     interests,
+    # )
+
+    # print("\n")
+    # print(itinerary)
+
+    # save_choice = input(
+    #     "\nWould you like to save this itinerary? (yes/no): "
+    # ).strip().lower()
+
+    # if save_choice in ["yes", "y"]:
+    #     save_itinerary(itinerary)
+
+    while True:
+        show_menu()
+
+        choice = input("\nEnter your choice (1-3): ").strip()
+
+        if choice == "1":
+            create_itinerary()
+
+        elif choice == "2":
+            show_supported_interests()
+
+        elif choice == "3":
+            print("\nThank you for using TripCraft. Goodbye!")
+            break
+
+        else:
+            print("\nInvalid choice. Please enter 1, 2, or 3.")
 
 if __name__ == "__main__":
     main()
