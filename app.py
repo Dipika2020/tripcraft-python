@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+from math import radians, sin, cos, sqrt, atan2
 from datetime import date
 
 # -----------------------------
@@ -93,6 +94,90 @@ def get_weather(latitude, longitude, days):
     response.raise_for_status()
 
     return response.json()
+
+# Nearby locations/attractions
+def get_nearby_attractions(latitude, longitude):
+    overpass_url = "https://overpass-api.de/api/interpreter"
+
+    #search within 5 kms for(tourist attraction, museums, historic, parks, other)
+    query = f"""
+    [out:json][timeout:25];
+
+    (
+      node["tourism"="attraction"](around:5000,{latitude},{longitude});
+      node["tourism"="museum"](around:5000,{latitude},{longitude}); 
+      node["historic"](around:5000,{latitude},{longitude});
+      node["leisure"="park"](around:5000,{latitude},{longitude});
+      way["tourism"="attraction"](around:5000,{latitude},{longitude});
+      way["tourism"="museum"](around:5000,{latitude},{longitude});
+      way["historic"](around:5000,{latitude},{longitude});
+      way["leisure"="park"](around:5000,{latitude},{longitude});
+    );
+
+    out center tags;
+    """
+
+    response = requests.post(
+        overpass_url,
+        data=query,
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    return response.json().get("elements", [])
+
+#helper func for place names
+def get_place_name(place):
+    tags = place.get("tags", {})
+
+    return tags.get(
+        "name",
+        "Unnamed attraction",
+    )
+
+#helper function for categories
+def get_place_category(place):
+    tags = place.get("tags", {})
+
+    if tags.get("tourism") :
+        return tags["tourism"].replace("_", " ").title()
+
+    if tags.get("historic") :
+        return tags["historic"].replace("_", " ").title()
+
+    if tags.get("liesure") :
+        return tags["leisure"].replace("_", " ").title()
+
+    return "Point of Interest"
+
+#func to calc approximate dist b/w destination and each attaction
+def calculate_distance(
+    latitude_1,
+    longitude_1,
+    latitude_2,
+    longitude_2,
+) :
+    earth_radius_km = 6371
+
+    latitude_difference = radians(
+        latitude_2 - latitude_1
+    )
+
+    longitude_difference = radians(
+        longitude_2 - longitude_1
+    )
+
+    a = (
+        sin(latitude_difference / 2) ** 2
+        + cos(radians(latitude_1))
+        * cos(radians(latitude_2))
+        * sin(longitude_difference / 2) ** 2
+    )
+
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    return earth_radius_km * c
 
 
 def weather_description(code):
@@ -448,6 +533,109 @@ if generate_button:
         )
 
     st.divider()
+
+
+    st.subheader("📍 Nearby Attractions")
+
+    with st.spinner("Finding nearby attractions..."):
+        try: 
+            attractions = get_nearby_attractions(
+                location["latitude"],
+                location["longitude"],
+            )
+
+        except requests.RequestException:
+            attractions = []
+
+    valid_attractions = []
+
+    for attraction in attractions:
+        tags = attraction.get("tags", {})
+
+        if "name" not in tags:
+            continue
+
+        attraction_latitude = attraction.get(
+            "lat",
+            attraction.get("center", {}).get("lat"),
+        )
+
+        attraction_longitude = attraction.get(
+            "lon",
+            attraction.get("center", {}).get("lon"),
+        )
+
+        if (
+            attraction_latitude is None
+            or attraction_longitude is None
+        ): 
+            continue
+
+        distance = calculate_distance(
+            location["latitude"],
+            location["longitude"],
+            attraction_latitude,
+            attraction_longitude,
+        )
+
+        valid_attractions.append(
+            {
+                "name": get_place_name(attraction),
+                "category": get_place_category(attraction),
+                "distance": distance,
+                "latitude": attraction_latitude,
+                "longitude": attraction_longitude,
+                "website": tags.get("website"),
+                "wikidata": tags.get("wikidata"),
+            }
+        )
+
+    valid_attractions.sort(
+        key = lambda place: place["distance"]
+    )
+
+    valid_attractions = valid_attractions[:10]
+
+    if not valid_attractions:
+        st.info(
+            "No nearby attractions were found for this destination."
+        )
+
+    else:
+        for attraction in valid_attractions:
+            with st.container(border=True):
+                st.markdown(
+                    f"### 📍 {attraction['name']}"
+                )
+
+                st.write(
+                    f"**Category:** "
+                    f"{attraction['category']}"
+                )
+
+                st.write(
+                    f"**Distance:** "
+                    f"{attraction['distance']:.2f} km"
+                )
+
+                map_url = (
+                    "https://www.openstreetmap.org/"
+                    f"?mlat={attraction['latitude']}"
+                    f"&mlon={attraction['longitude']}"
+                    "#map=18/"
+                    f"{attraction['latitude']}/"
+                    f"{attraction['longitude']}"
+                )
+
+                st.markdown(
+                    f"[🗺️ View on OpenStreetMap]({map_url})"
+                )
+
+                if attraction["website"]:
+                    st.markdown(
+                        "[🌐 Visit website]"
+                        f"({attraction['website']})"
+                    )
 
 
     # -----------------------------
