@@ -1,4 +1,5 @@
 import streamlit as st
+import requests
 from datetime import date
 
 # -----------------------------
@@ -40,6 +41,87 @@ ACTIVITIES = {
         ("Explore an art gallery", 18),
     ],
 }
+
+# newly added weather forecast
+def get_coordinates(destination):
+    """Find latitude and longitude for a destination."""
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+
+    params = {
+        "name": destination,
+        "count": 1,
+        "language": "en",
+        "format": "json",
+    }
+
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
+
+    data = response.json()
+
+    if "results" not in data or not data["results"]:
+        return None
+
+    location = data["results"][0]
+
+    return {
+        "name": location["name"],
+        "country": location.get("country", ""),
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+    }
+
+
+def get_weather(latitude, longitude, days):
+    """Get a live weather forecast."""
+    url = "https://api.open-meteo.com/v1/forecast"
+
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "daily": [
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_probability_max",
+            "weather_code",
+        ],
+        "forecast_days": min(days, 16),
+        "timezone": "auto",
+    }
+
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
+
+    return response.json()
+
+
+def weather_description(code):
+    """Convert a weather code into readable text."""
+    descriptions = {
+        0: "Clear sky",
+        1: "Mainly clear",
+        2: "Partly cloudy",
+        3: "Overcast",
+        45: "Fog",
+        48: "Rime fog",
+        51: "Light drizzle",
+        53: "Moderate drizzle",
+        55: "Dense drizzle",
+        61: "Light rain",
+        63: "Moderate rain",
+        65: "Heavy rain",
+        71: "Light snow",
+        73: "Moderate snow",
+        75: "Heavy snow",
+        80: "Light rain showers",
+        81: "Moderate rain showers",
+        82: "Heavy rain showers",
+        95: "Thunderstorm",
+        96: "Thunderstorm with hail",
+        99: "Thunderstorm with heavy hail",
+    }
+
+    return descriptions.get(code, "Unknown conditions")
 
 # -----------------------------
 # Custom styling
@@ -166,6 +248,40 @@ if generate_button:
         for interest in interests:
             selected_activities.extend(ACTIVITIES[interest])
 
+    # ======================================
+    # Get live destination and weather data
+    # ======================================
+
+    with st.spinner(
+        "Finding destination and checking live weather ..."
+    ):
+
+        try:
+            location = get_coordinates(destination)
+
+            if location is None:
+                st.warning(
+                    "We could not find that destination. "
+                    "Please try a more specific city name."
+                )
+                st.stop()
+
+            weather = get_weather(
+                location["latitude"],
+                location["longitude"],
+                days,
+            )
+
+        except requests.RequestException:
+            st.error(
+                "Live weather data is temporarily unavailable. "
+                "Please try again later."
+            )
+            st.stop()
+
+    # ======================================
+    # Calculate itinerary costs
+    # ======================================
     activities_needed = days * 2
 
     activities = [
@@ -238,9 +354,108 @@ if generate_button:
 
     st.divider()
 
+    # ======================================
+    # Live weather forecast
+    # ======================================
+    st.header("🌤️ Live Weather Forecast")
+
+    st.caption(
+        f"Weather for {location['name']}, "
+        f"{location['country']}"
+    )
+
+    weather_dates = weather["daily"]["time"]
+
+    max_temperatures = weather["daily"][
+        "temperature_2m_max"
+    ]
+
+    min_temperatures = weather["daily"][
+        "temperature_2m_min"
+    ]
+
+    rain_probabilities = weather["daily"][
+        "precipitation_probability_max"
+    ]
+
+    weather_codes = weather["daily"][
+        "weather_code"
+    ]
+
+    weather_columns = st.columns(
+        min(len(weather_dates), 4)
+    )
+
+    for index, weather_date in enumerate(
+        weather_dates
+    ):
+
+        column = weather_columns[
+            index % len(weather_columns)
+        ]
+
+        with column:
+            st.markdown(
+                f"### Day {index + 1}"
+            )
+
+            st.write(
+                f"📅 {weather_date}"
+            )
+
+            st.write(
+                f"🌡️ "
+                f"{min_temperatures[index]}°C – "
+                f"{max_temperatures[index]}°C"
+            )
+
+            st.write(
+                f"🌧️ Rain chance: "
+                f"{rain_probabilities[index]}%"
+            )
+
+            st.write(
+                weather_description(
+                    weather_codes[index]
+                )
+            )
+
+
+    # ======================================
+    # Weather-based advice
+    # ======================================     
+
+    first_day_rain = rain_probabilities[0]
+
+    if first_day_rain >= 60:
+        st.warning(
+            "☔ Rain is likely on your first day. "
+            "Consider museums, cafés, galleries, "
+            "or other indoor attractions."
+        )
+
+    elif first_day_rain >= 30:
+        st.info(
+            "🌦️ There is a moderate chance of rain "
+            "on your first day. Consider carrying "
+            "an umbrella."
+        )
+
+    else:
+        st.success(
+            "☀️ Outdoor activities may be suitable "
+            "on your first day."
+        )
+
+    st.divider()
+
+
     # -----------------------------
     # Budget status
     # -----------------------------
+
+    st.header("💰 Budget Summary")
+
     if remaining_budget >= 0:
         st.success(
             f"✅ You are within budget by "
