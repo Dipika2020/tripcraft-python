@@ -1,41 +1,50 @@
 import streamlit as st
 import requests
+
 from math import radians, sin, cos, sqrt, atan2
 from datetime import date
+
 
 # -----------------------------
 # Page configuration
 # -----------------------------
+
 st.set_page_config(
     page_title="TripCraft",
     page_icon="✈️",
     layout="wide",
 )
 
+
 # -----------------------------
 # Activity data
 # -----------------------------
+
 ACTIVITIES = {
     "history": [
         ("Visit a historical landmark", 25),
         ("Explore a museum", 20),
         ("Visit an old town or heritage area", 15),
     ],
+
     "food": [
         ("Try a traditional local meal", 30),
         ("Explore a local food market", 15),
         ("Visit a popular café", 12),
     ],
+
     "nature": [
         ("Visit a scenic park", 10),
         ("Explore a nature trail", 15),
         ("Enjoy a viewpoint or garden", 12),
     ],
+
     "shopping": [
         ("Explore local shopping streets", 20),
         ("Visit a local market", 15),
         ("Browse souvenir shops", 10),
     ],
+
     "culture": [
         ("Visit a cultural attraction", 20),
         ("Attend a local cultural activity", 25),
@@ -43,9 +52,14 @@ ACTIVITIES = {
     ],
 }
 
-# newly added weather forecast
+
+# -----------------------------
+# Weather functions
+# -----------------------------
+
 def get_coordinates(destination):
     """Find latitude and longitude for a destination."""
+
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     params = {
@@ -55,7 +69,12 @@ def get_coordinates(destination):
         "format": "json",
     }
 
-    response = requests.get(url, params=params, timeout=10)
+    response = requests.get(
+        url,
+        params=params,
+        timeout=10,
+    )
+
     response.raise_for_status()
 
     data = response.json()
@@ -75,6 +94,7 @@ def get_coordinates(destination):
 
 def get_weather(latitude, longitude, days):
     """Get a live weather forecast."""
+
     url = "https://api.open-meteo.com/v1/forecast"
 
     params = {
@@ -90,45 +110,103 @@ def get_weather(latitude, longitude, days):
         "timezone": "auto",
     }
 
-    response = requests.get(url, params=params, timeout=10)
+    response = requests.get(
+        url,
+        params=params,
+        timeout=10,
+    )
+
     response.raise_for_status()
 
     return response.json()
 
-# Nearby locations/attractions
-def get_nearby_attractions(latitude, longitude):
-    overpass_url = "https://overpass-api.de/api/interpreter"
 
-    #search within 5 kms for(tourist attraction, museums, historic, parks, other)
+# -----------------------------
+# Nearby attractions
+# OpenStreetMap + Overpass API
+# -----------------------------
+
+def get_nearby_attractions(latitude, longitude):
+    """Find nearby attractions using OpenStreetMap."""
+
+    overpass_url = (
+        "https://overpass.kumi.systems/api/interpreter"
+    )
+
     query = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:60];
 
     (
-      node["tourism"="attraction"](around:5000,{latitude},{longitude});
-      node["tourism"="museum"](around:5000,{latitude},{longitude}); 
-      node["historic"](around:5000,{latitude},{longitude});
-      node["leisure"="park"](around:5000,{latitude},{longitude});
-      way["tourism"="attraction"](around:5000,{latitude},{longitude});
-      way["tourism"="museum"](around:5000,{latitude},{longitude});
-      way["historic"](around:5000,{latitude},{longitude});
-      way["leisure"="park"](around:5000,{latitude},{longitude});
+        nwr["tourism"="attraction"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["tourism"="museum"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["tourism"="gallery"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["tourism"="viewpoint"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["tourism"="zoo"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["tourism"="theme_park"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["historic"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["leisure"="park"](
+            around:10000,{latitude},{longitude}
+        );
+
+        nwr["leisure"="garden"](
+            around:10000,{latitude},{longitude}
+        );
     );
 
     out center tags;
     """
 
-    response = requests.post(
-        overpass_url,
-        data=query,
-        timeout=30,
-    )
+    try:
+        response = requests.post(
+            overpass_url,
+            data=query,
+            headers={
+                "User-Agent": "TripCraft/1.0 (travel planner)"
+            },
+            timeout=70,
+        )
 
-    response.raise_for_status()
+        response.raise_for_status()
 
-    return response.json().get("elements", [])
+        data = response.json()
 
-#helper func for place names
+        return data.get("elements", [])
+
+    except requests.RequestException as error:
+        st.error(
+            f"OpenStreetMap request failed: {error}"
+        )
+        return []
+
+
+# -----------------------------
+# Attraction helper functions
+# -----------------------------
+
 def get_place_name(place):
+    """Return the place name."""
+
     tags = place.get("tags", {})
 
     return tags.get(
@@ -136,28 +214,134 @@ def get_place_name(place):
         "Unnamed attraction",
     )
 
-#helper function for categories
+
 def get_place_category(place):
+    """Convert OpenStreetMap tags into readable categories."""
+
     tags = place.get("tags", {})
 
-    if tags.get("tourism") :
-        return tags["tourism"].replace("_", " ").title()
+    tourism = tags.get("tourism")
+    historic = tags.get("historic")
+    leisure = tags.get("leisure")
 
-    if tags.get("historic") :
-        return tags["historic"].replace("_", " ").title()
+    category_map = {
+        "attraction": "Tourist Attraction",
+        "museum": "Museum",
+        "gallery": "Art Gallery",
+        "viewpoint": "Viewpoint",
+        "zoo": "Zoo",
+        "theme_park": "Theme Park",
+    }
 
-    if tags.get("liesure") :
-        return tags["leisure"].replace("_", " ").title()
+    historic_map = {
+        "castle": "Historic Castle",
+        "monument": "Historic Monument",
+        "memorial": "Memorial",
+        "archaeological_site": "Archaeological Site",
+        "ruins": "Historic Ruins",
+        "building": "Historic Building",
+    }
+
+    leisure_map = {
+        "park": "Park",
+        "garden": "Garden",
+        "water_park": "Water Park",
+    }
+
+    if tourism in category_map:
+        return category_map[tourism]
+
+    if historic in historic_map:
+        return historic_map[historic]
+
+    if leisure in leisure_map:
+        return leisure_map[leisure]
 
     return "Point of Interest"
 
-#func to calc approximate dist b/w destination and each attaction
+
+def calculate_attraction_score(
+    attraction,
+    selected_interests,
+):
+    """
+    Score an attraction according to the user's
+    selected interests.
+    """
+
+    tags = attraction.get("tags", {})
+
+    tourism = tags.get("tourism", "")
+    historic = tags.get("historic", "")
+    leisure = tags.get("leisure", "")
+
+    score = 0
+
+    interests = [
+        interest.lower()
+        for interest in selected_interests
+    ]
+
+    # -------------------------
+    # History
+    # -------------------------
+
+    if "history" in interests:
+
+        if historic:
+            score += 5
+
+        if tourism == "museum":
+            score += 4
+
+        if tourism == "attraction":
+            score += 2
+
+    # -------------------------
+    # Culture
+    # -------------------------
+
+    if "culture" in interests:
+
+        if tourism == "museum":
+            score += 5
+
+        if tourism == "gallery":
+            score += 5
+
+        if tourism == "attraction":
+            score += 2
+
+    # -------------------------
+    # Nature
+    # -------------------------
+
+    if "nature" in interests:
+
+        if leisure == "park":
+            score += 5
+
+        if leisure == "garden":
+            score += 5
+
+        if tourism == "viewpoint":
+            score += 4
+
+    return score
+
+
+# -----------------------------
+# Distance calculation
+# -----------------------------
+
 def calculate_distance(
     latitude_1,
     longitude_1,
     latitude_2,
     longitude_2,
-) :
+):
+    """Calculate approximate distance between two coordinates."""
+
     earth_radius_km = 6371
 
     latitude_difference = radians(
@@ -175,13 +359,21 @@ def calculate_distance(
         * sin(longitude_difference / 2) ** 2
     )
 
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    c = 2 * atan2(
+        sqrt(a),
+        sqrt(1 - a),
+    )
 
     return earth_radius_km * c
 
 
+# -----------------------------
+# Weather descriptions
+# -----------------------------
+
 def weather_description(code):
     """Convert a weather code into readable text."""
+
     descriptions = {
         0: "Clear sky",
         1: "Mainly clear",
@@ -206,14 +398,20 @@ def weather_description(code):
         99: "Thunderstorm with heavy hail",
     }
 
-    return descriptions.get(code, "Unknown conditions")
+    return descriptions.get(
+        code,
+        "Unknown conditions",
+    )
+
 
 # -----------------------------
 # Custom styling
 # -----------------------------
+
 st.markdown(
     """
     <style>
+
     .main {
         background-color: #f5f7fb;
     }
@@ -254,14 +452,17 @@ st.markdown(
         padding: 0.4rem 0;
         font-size: 1rem;
     }
+
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+
 # -----------------------------
 # Header
 # -----------------------------
+
 st.markdown(
     '<div class="trip-title">✈️ TripCraft</div>',
     unsafe_allow_html=True,
@@ -274,9 +475,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # -----------------------------
 # Sidebar inputs
 # -----------------------------
+
 st.sidebar.header("🧳 Plan Your Trip")
 
 destination = st.sidebar.text_input(
@@ -310,28 +513,38 @@ generate_button = st.sidebar.button(
     use_container_width=True,
 )
 
+
 # -----------------------------
 # Generate itinerary
 # -----------------------------
+
 if generate_button:
+
     if not destination.strip():
         st.warning("Please enter a destination.")
         st.stop()
 
     if not interests:
+
         st.info(
             "No interests selected. General activities will be used."
         )
+
         selected_activities = [
             ("Explore the city", 15),
             ("Visit a popular attraction", 25),
             ("Try local food", 30),
         ]
+
     else:
+
         selected_activities = []
 
         for interest in interests:
-            selected_activities.extend(ACTIVITIES[interest])
+
+            selected_activities.extend(
+                ACTIVITIES[interest]
+            )
 
     # ======================================
     # Get live destination and weather data
@@ -342,13 +555,18 @@ if generate_button:
     ):
 
         try:
-            location = get_coordinates(destination)
+
+            location = get_coordinates(
+                destination
+            )
 
             if location is None:
+
                 st.warning(
                     "We could not find that destination. "
                     "Please try a more specific city name."
                 )
+
                 st.stop()
 
             weather = get_weather(
@@ -358,19 +576,24 @@ if generate_button:
             )
 
         except requests.RequestException:
+
             st.error(
                 "Live weather data is temporarily unavailable. "
                 "Please try again later."
             )
+
             st.stop()
 
     # ======================================
     # Calculate itinerary costs
     # ======================================
+
     activities_needed = days * 2
 
     activities = [
-        selected_activities[index % len(selected_activities)]
+        selected_activities[
+            index % len(selected_activities)
+        ]
         for index in range(activities_needed)
     ]
 
@@ -378,11 +601,17 @@ if generate_button:
     daily_transport_cost = 10
 
     total_activity_cost = sum(
-        cost for _, cost in activities
+        cost
+        for _, cost in activities
     )
 
-    total_food_cost = days * daily_food_cost
-    total_transport_cost = days * daily_transport_cost
+    total_food_cost = (
+        days * daily_food_cost
+    )
+
+    total_transport_cost = (
+        days * daily_transport_cost
+    )
 
     estimated_total = (
         total_activity_cost
@@ -390,18 +619,23 @@ if generate_button:
         + total_transport_cost
     )
 
-    remaining_budget = budget - estimated_total
+    remaining_budget = (
+        budget - estimated_total
+    )
 
     # -----------------------------
     # Summary cards
     # -----------------------------
+
     st.success(
-        f"Your itinerary for **{destination.title()}** is ready!"
+        f"Your itinerary for "
+        f"**{destination.title()}** is ready!"
     )
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
+
         st.markdown(
             '<div class="metric-card">'
             "📍<br><b>Destination</b><br>"
@@ -411,6 +645,7 @@ if generate_button:
         )
 
     with col2:
+
         st.markdown(
             '<div class="metric-card">'
             "📅<br><b>Duration</b><br>"
@@ -420,6 +655,7 @@ if generate_button:
         )
 
     with col3:
+
         st.markdown(
             '<div class="metric-card">'
             "💰<br><b>Estimated Cost</b><br>"
@@ -429,6 +665,7 @@ if generate_button:
         )
 
     with col4:
+
         st.markdown(
             '<div class="metric-card">'
             "💵<br><b>Budget Remaining</b><br>"
@@ -442,6 +679,7 @@ if generate_button:
     # ======================================
     # Live weather forecast
     # ======================================
+
     st.header("🌤️ Live Weather Forecast")
 
     st.caption(
@@ -480,6 +718,7 @@ if generate_button:
         ]
 
         with column:
+
             st.markdown(
                 f"### Day {index + 1}"
             )
@@ -505,14 +744,14 @@ if generate_button:
                 )
             )
 
-
     # ======================================
     # Weather-based advice
-    # ======================================     
+    # ======================================
 
     first_day_rain = rain_probabilities[0]
 
     if first_day_rain >= 60:
+
         st.warning(
             "☔ Rain is likely on your first day. "
             "Consider museums, cafés, galleries, "
@@ -520,6 +759,7 @@ if generate_button:
         )
 
     elif first_day_rain >= 30:
+
         st.info(
             "🌦️ There is a moderate chance of rain "
             "on your first day. Consider carrying "
@@ -527,6 +767,7 @@ if generate_button:
         )
 
     else:
+
         st.success(
             "☀️ Outdoor activities may be suitable "
             "on your first day."
@@ -534,43 +775,118 @@ if generate_button:
 
     st.divider()
 
+    # ======================================
+    # Nearby attractions
+    # ======================================
 
     st.subheader("📍 Nearby Attractions")
 
-    with st.spinner("Finding nearby attractions..."):
-        try: 
-            attractions = get_nearby_attractions(
-                location["latitude"],
-                location["longitude"],
-            )
+    with st.spinner(
+        "Finding nearby attractions..."
+    ):
 
-        except requests.RequestException:
-            attractions = []
+        attractions = get_nearby_attractions(
+            location["latitude"],
+            location["longitude"],
+        )
+
+    # -----------------------------
+    # Filter and process attractions
+    # -----------------------------
 
     valid_attractions = []
 
-    for attraction in attractions:
-        tags = attraction.get("tags", {})
+    allowed_types = {
+        "attraction",
+        "museum",
+        "gallery",
+        "viewpoint",
+        "zoo",
+        "theme_park",
+    }
 
+    allowed_historic_types = {
+        "castle",
+        "monument",
+        "memorial",
+        "archaeological_site",
+        "ruins",
+        "building",
+    }
+
+    allowed_leisure_types = {
+        "park",
+        "garden",
+        "water_park",
+    }
+
+    for attraction in attractions:
+
+        tags = attraction.get(
+            "tags",
+            {}
+        )
+
+        # Must have a name
         if "name" not in tags:
             continue
 
+        tourism_type = tags.get(
+            "tourism",
+            ""
+        )
+
+        historic_type = tags.get(
+            "historic",
+            ""
+        )
+
+        leisure_type = tags.get(
+            "leisure",
+            ""
+        )
+
+        # Keep travel-focused places
+        if (
+            tourism_type not in allowed_types
+            and historic_type not in allowed_historic_types
+            and leisure_type not in allowed_leisure_types
+        ):
+            continue
+
+        center = attraction.get(
+            "center",
+            {}
+        )
+
         attraction_latitude = attraction.get(
-            "lat",
-            attraction.get("center", {}).get("lat"),
+            "lat"
         )
 
         attraction_longitude = attraction.get(
-            "lon",
-            attraction.get("center", {}).get("lon"),
+            "lon"
         )
+
+        # Ways usually use center coordinates
+        if attraction_latitude is None:
+
+            attraction_latitude = center.get(
+                "lat"
+            )
+
+        if attraction_longitude is None:
+
+            attraction_longitude = center.get(
+                "lon"
+            )
 
         if (
             attraction_latitude is None
             or attraction_longitude is None
-        ): 
+        ):
             continue
 
+        # Calculate distance
         distance = calculate_distance(
             location["latitude"],
             location["longitude"],
@@ -578,34 +894,71 @@ if generate_button:
             attraction_longitude,
         )
 
+        # Calculate interest score
+        score = calculate_attraction_score(
+            attraction,
+            interests,
+        )
+
         valid_attractions.append(
             {
-                "name": get_place_name(attraction),
-                "category": get_place_category(attraction),
+                "name": get_place_name(
+                    attraction
+                ),
+                "category": get_place_category(
+                    attraction
+                ),
                 "distance": distance,
                 "latitude": attraction_latitude,
                 "longitude": attraction_longitude,
-                "website": tags.get("website"),
-                "wikidata": tags.get("wikidata"),
+                "website": tags.get(
+                    "website"
+                ),
+                "wikidata": tags.get(
+                    "wikidata"
+                ),
+                "score": score,
             }
         )
 
+    # -----------------------------
+    # Sort attractions
+    # -----------------------------
+
     valid_attractions.sort(
-        key = lambda place: place["distance"]
+        key=lambda place: (
+            -place["score"],
+            place["distance"],
+        )
     )
 
-    valid_attractions = valid_attractions[:10]
+    # Show only top 10
+    valid_attractions = (
+        valid_attractions[:10]
+    )
+
+    # -----------------------------
+    # Display attractions
+    # -----------------------------
 
     if not valid_attractions:
-        st.info(
-            "No nearby attractions were found for this destination."
+
+        st.warning(
+            "No nearby attractions were found "
+            "for this destination."
         )
 
     else:
+
         for attraction in valid_attractions:
-            with st.container(border=True):
+
+            with st.container(
+                border=True
+            ):
+
                 st.markdown(
-                    f"### 📍 {attraction['name']}"
+                    f"### 📍 "
+                    f"{attraction['name']}"
                 )
 
                 st.write(
@@ -628,15 +981,16 @@ if generate_button:
                 )
 
                 st.markdown(
-                    f"[🗺️ View on OpenStreetMap]({map_url})"
+                    f"[🗺️ View on OpenStreetMap]"
+                    f"({map_url})"
                 )
 
                 if attraction["website"]:
+
                     st.markdown(
                         "[🌐 Visit website]"
                         f"({attraction['website']})"
                     )
-
 
     # -----------------------------
     # Budget status
@@ -645,49 +999,68 @@ if generate_button:
     st.header("💰 Budget Summary")
 
     if remaining_budget >= 0:
+
         st.success(
             f"✅ You are within budget by "
             f"${remaining_budget:.2f}."
         )
+
     else:
+
         st.error(
             f"⚠️ You are over budget by "
             f"${abs(remaining_budget):.2f}."
         )
+
         st.info(
-            "💡 Try reducing the number of paid activities."
+            "💡 Try reducing the number "
+            "of paid activities."
         )
 
     # -----------------------------
     # Daily itinerary
     # -----------------------------
+
     st.header("🗺️ Your Travel Itinerary")
 
     activity_index = 0
 
     for day in range(1, days + 1):
+
         day_activities = activities[
             activity_index:activity_index + 2
         ]
 
         day_html = f"""
         <div class="day-card">
+
             <h3>🌞 Day {day}</h3>
         """
 
         for activity, cost in day_activities:
+
             day_html += (
-                f'<div class="activity">📌 {activity} '
-                f'<b>(${cost:.2f})</b></div>'
+                f'<div class="activity">'
+                f"📌 {activity} "
+                f"<b>(${cost:.2f})</b>"
+                f"</div>"
             )
 
         day_html += (
-            f'<div class="activity">🍽️ Food estimate '
-            f'<b>(${daily_food_cost:.2f})</b></div>'
-            f'<div class="activity">🚗 Transport estimate '
-            f'<b>(${daily_transport_cost:.2f})</b></div>'
-            "</div>"
+            f'<div class="activity">'
+            f"🍽️ Food estimate "
+            f"<b>(${daily_food_cost:.2f})</b>"
+            f"</div>"
         )
+
+        day_html += (
+            f'<div class="activity">'
+            f"🚗 Transport estimate "
+            f"<b>(${daily_transport_cost:.2f})</b>"
+            f"</div>"
+        )
+
+        day_html += "</div>"
 
         st.markdown(
             day_html,
@@ -699,8 +1072,9 @@ if generate_button:
     # -----------------------------
     # Download itinerary
     # -----------------------------
+
     itinerary_text = (
-        f"TRIPCRAFT\n"
+        "TRIPCRAFT\n"
         f"Destination: {destination}\n"
         f"Duration: {days} days\n"
         f"Budget: ${budget:.2f}\n"
@@ -710,23 +1084,36 @@ if generate_button:
     activity_index = 0
 
     for day in range(1, days + 1):
-        itinerary_text += f"DAY {day}\n"
+
+        itinerary_text += (
+            f"DAY {day}\n"
+        )
 
         for _ in range(2):
-            activity, cost = activities[activity_index]
+
+            activity, cost = activities[
+                activity_index
+            ]
+
             itinerary_text += (
-                f"- {activity} - ${cost:.2f}\n"
+                f"- {activity} - "
+                f"${cost:.2f}\n"
             )
+
             activity_index += 1
 
         itinerary_text += (
-            f"- Food estimate - ${daily_food_cost:.2f}\n"
-            f"- Transport estimate - ${daily_transport_cost:.2f}\n\n"
+            f"- Food estimate - "
+            f"${daily_food_cost:.2f}\n"
+            f"- Transport estimate - "
+            f"${daily_transport_cost:.2f}\n\n"
         )
 
     itinerary_text += (
-        f"Estimated total: ${estimated_total:.2f}\n"
-        f"Remaining budget: ${remaining_budget:.2f}\n"
+        f"Estimated total: "
+        f"${estimated_total:.2f}\n"
+        f"Remaining budget: "
+        f"${remaining_budget:.2f}\n"
     )
 
     st.download_button(
@@ -738,7 +1125,8 @@ if generate_button:
     )
 
 else:
+
     st.info(
-        "👈 Enter your trip details in the sidebar and "
-        "click **Generate Itinerary** to begin."
+        "👈 Enter your trip details in the sidebar "
+        "and click **Generate Itinerary** to begin."
     )
