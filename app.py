@@ -267,6 +267,52 @@ def get_place_category(place):
 
     return "Point of Interest"
 
+#helper func for actual estimated cost from OSM
+def get_attraction_cost(attraction):
+    """
+    Determine attraction admission cost from OpenStreetMap tags.
+
+    Returns:
+        status: Free / Estimated / Unknown
+        amount: numeric cost when available
+        source: explanation of where the cost came from
+    """
+
+    tags = attraction.get("tags", {})
+
+    fee = tags.get("fee", "").strip().lower()
+    charge = tags.get("charge", "").strip()
+
+    # Explicitly free
+    if fee == "no":
+        return {
+            "status": "Free",
+            "amount": 0.0,
+            "source": "OpenStreetMap indicates no admission fee.",
+        }
+
+    # Explicitly paid with a listed charge
+    if fee == "yes" and charge:
+        return {
+            "status": "Estimated",
+            "amount": None,
+            "source": f"OpenStreetMap lists a charge: {charge}",
+        }
+
+    # Explicitly paid but no price
+    if fee == "yes":
+        return {
+            "status": "Unknown",
+            "amount": None,
+            "source": "Admission fee is indicated, but no price is listed.",
+        }
+
+    # No fee information available
+    return {
+        "status": "Unknown",
+        "amount": None,
+        "source": "No admission pricing information is available.",
+    }
 
 def calculate_attraction_score(
     attraction,
@@ -923,6 +969,8 @@ if generate_button:
             interests,
         )
 
+        cost_info = get_attraction_cost(attraction)
+
         valid_attractions.append(
             {
                 "name": get_place_name(
@@ -941,6 +989,9 @@ if generate_button:
                     "wikidata"
                 ),
                 "score": score,
+                "cost_status": cost_info["status"],
+                "cost_amount": cost_info["amount"],
+                "cost_source": cost_info["source"],
             }
         )
 
@@ -999,6 +1050,26 @@ if generate_button:
                     f"**Distance:** "
                     f"{attraction['distance']:.2f} km"
                 )
+
+                if attraction["cost_status"] == "Free":
+
+                    st.success(
+                        "💚 **Admission: Free**"
+                    )
+
+                elif attraction["cost_status"] == "Estimated":
+
+                    st.info(
+                        f"💰 **Admission: Estimated** — "
+                        f"{attraction['cost_source']}"
+                    )
+
+                else:
+
+                    st.warning(
+                        "💰 **Admission: Unknown** — "
+                        "Check the attraction's website for current pricing."
+                    )
 
                 map_url = (
                     "https://www.openstreetmap.org/"
