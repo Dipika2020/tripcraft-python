@@ -329,6 +329,21 @@ def calculate_attraction_score(
 
     return score
 
+#helper func for live itinerary attractions
+def select_itinerary_attractions(
+    attractions,
+    days,
+):
+    """
+    Select live attractions for the itinerary.
+
+    Returns up to two attractions per day.
+    """
+
+    required_attractions = days * 2
+
+    return attractions[:required_attractions]
+
 
 # -----------------------------
 # Distance calculation
