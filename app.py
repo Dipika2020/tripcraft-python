@@ -952,6 +952,12 @@ if generate_button:
         valid_attractions[:10]
     )
 
+    #adding selected attraction variable
+    selected_itinerary_attractions = select_itinerary_attractions(
+        valid_attractions,
+        days,
+    )
+
     # -----------------------------
     # Display attractions
     # -----------------------------
