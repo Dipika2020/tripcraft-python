@@ -188,7 +188,7 @@ def get_nearby_attractions(latitude, longitude):
                     "User-Agent": "TripCraft/1.0 (travel planner)"
                 },
                 timeout=60,
-             )
+            )
 
             response.raise_for_status()
 
@@ -198,7 +198,6 @@ def get_nearby_attractions(latitude, longitude):
 
         except requests.RequestException:
             continue
-
 
     st.warning(
         "Live OpenStreetMap attractions are temporarily "
@@ -267,7 +266,11 @@ def get_place_category(place):
 
     return "Point of Interest"
 
-#helper func for actual estimated cost from OSM
+
+# -----------------------------
+# Attraction cost function
+# -----------------------------
+
 def get_attraction_cost(attraction):
     """
     Determine attraction admission cost from OpenStreetMap tags.
@@ -291,28 +294,53 @@ def get_attraction_cost(attraction):
             "source": "OpenStreetMap indicates no admission fee.",
         }
 
-    # Explicitly paid with a listed charge
-    if fee == "yes" and charge:
-        return {
-            "status": "Estimated",
-            "amount": None,
-            "source": f"OpenStreetMap lists a charge: {charge}",
-        }
+    # Try to read a simple numeric charge
+    if charge:
+        charge_value = charge.replace(",", "").strip()
+
+        # Remove common currency symbols
+        for symbol in ["$", "€", "£", "CAD", "USD"]:
+            charge_value = charge_value.replace(
+                symbol,
+                "",
+            ).strip()
+
+        try:
+            amount = float(charge_value)
+
+            return {
+                "status": "Estimated",
+                "amount": amount,
+                "source": (
+                    f"OpenStreetMap lists a charge of "
+                    f"{charge}."
+                ),
+            }
+
+        except ValueError:
+            pass
 
     # Explicitly paid but no price
     if fee == "yes":
         return {
             "status": "Unknown",
             "amount": None,
-            "source": "Admission fee is indicated, but no price is listed.",
+            "source": (
+                "Admission fee is indicated, "
+                "but no price is listed."
+            ),
         }
 
     # No fee information available
     return {
         "status": "Unknown",
         "amount": None,
-        "source": "No admission pricing information is available.",
+        "source": (
+            "No admission pricing information "
+            "is available."
+        ),
     }
+
 
 def calculate_attraction_score(
     attraction,
@@ -383,7 +411,11 @@ def calculate_attraction_score(
 
     return score
 
-#helper func for live itinerary attractions
+
+# -----------------------------
+# Live itinerary attractions
+# -----------------------------
+
 def select_itinerary_attractions(
     attractions,
     days,
@@ -654,107 +686,8 @@ if generate_button:
             st.stop()
 
     # ======================================
-    # Calculate itinerary costs
+    # Live weather data
     # ======================================
-
-    activities_needed = days * 2
-
-    activities = [
-        selected_activities[
-            index % len(selected_activities)
-        ]
-        for index in range(activities_needed)
-    ]
-
-    daily_food_cost = 30
-    daily_transport_cost = 10
-
-    total_activity_cost = sum(
-        cost
-        for _, cost in activities
-    )
-
-    total_food_cost = (
-        days * daily_food_cost
-    )
-
-    total_transport_cost = (
-        days * daily_transport_cost
-    )
-
-    estimated_total = (
-        total_activity_cost
-        + total_food_cost
-        + total_transport_cost
-    )
-
-    remaining_budget = (
-        budget - estimated_total
-    )
-
-    # -----------------------------
-    # Summary cards
-    # -----------------------------
-
-    st.success(
-        f"Your itinerary for "
-        f"**{destination.title()}** is ready!"
-    )
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-
-        st.markdown(
-            '<div class="metric-card">'
-            "📍<br><b>Destination</b><br>"
-            f"{destination.title()}"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col2:
-
-        st.markdown(
-            '<div class="metric-card">'
-            "📅<br><b>Duration</b><br>"
-            f"{days} days"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col3:
-
-        st.markdown(
-            '<div class="metric-card">'
-            "💰<br><b>Estimated Cost</b><br>"
-            f"${estimated_total:.2f}"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    with col4:
-
-        st.markdown(
-            '<div class="metric-card">'
-            "💵<br><b>Budget Remaining</b><br>"
-            f"${remaining_budget:.2f}"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    st.divider()
-
-    # ======================================
-    # Live weather forecast
-    # ======================================
-
-    st.header("🌤️ Live Weather Forecast")
-
-    st.caption(
-        f"Weather for {location['name']}, "
-        f"{location['country']}"
-    )
 
     weather_dates = weather["daily"]["time"]
 
@@ -774,81 +707,9 @@ if generate_button:
         "weather_code"
     ]
 
-    weather_columns = st.columns(
-        min(len(weather_dates), 4)
-    )
-
-    for index, weather_date in enumerate(
-        weather_dates
-    ):
-
-        column = weather_columns[
-            index % len(weather_columns)
-        ]
-
-        with column:
-
-            st.markdown(
-                f"### Day {index + 1}"
-            )
-
-            st.write(
-                f"📅 {weather_date}"
-            )
-
-            st.write(
-                f"🌡️ "
-                f"{min_temperatures[index]}°C – "
-                f"{max_temperatures[index]}°C"
-            )
-
-            st.write(
-                f"🌧️ Rain chance: "
-                f"{rain_probabilities[index]}%"
-            )
-
-            st.write(
-                weather_description(
-                    weather_codes[index]
-                )
-            )
-
-    # ======================================
-    # Weather-based advice
-    # ======================================
-
-    first_day_rain = rain_probabilities[0]
-
-    if first_day_rain >= 60:
-
-        st.warning(
-            "☔ Rain is likely on your first day. "
-            "Consider museums, cafés, galleries, "
-            "or other indoor attractions."
-        )
-
-    elif first_day_rain >= 30:
-
-        st.info(
-            "🌦️ There is a moderate chance of rain "
-            "on your first day. Consider carrying "
-            "an umbrella."
-        )
-
-    else:
-
-        st.success(
-            "☀️ Outdoor activities may be suitable "
-            "on your first day."
-        )
-
-    st.divider()
-
     # ======================================
     # Nearby attractions
     # ======================================
-
-    st.subheader("📍 Nearby Attractions")
 
     with st.spinner(
         "Finding nearby attractions..."
@@ -969,7 +830,10 @@ if generate_button:
             interests,
         )
 
-        cost_info = get_attraction_cost(attraction)
+        # Determine admission cost
+        cost_info = get_attraction_cost(
+            attraction
+        )
 
         valid_attractions.append(
             {
@@ -1007,19 +871,224 @@ if generate_button:
     )
 
     # Show only top 10
-    valid_attractions = (
-        valid_attractions[:10]
-    )
-
-    #adding selected attraction variable
-    selected_itinerary_attractions = select_itinerary_attractions(
-        valid_attractions,
-        days,
-    )
+    valid_attractions = valid_attractions[:10]
 
     # -----------------------------
-    # Display attractions
+    # Select itinerary attractions
     # -----------------------------
+
+    selected_itinerary_attractions = (
+        select_itinerary_attractions(
+            valid_attractions,
+            days,
+        )
+    )
+
+    # ======================================
+    # Calculate itinerary costs
+    # ======================================
+
+    activities_needed = days * 2
+
+    activities = [
+        selected_activities[
+            index % len(selected_activities)
+        ]
+        for index in range(activities_needed)
+    ]
+
+    daily_food_cost = 30
+    daily_transport_cost = 10
+
+    # Only known attraction costs are included.
+    # Unknown admission prices are excluded.
+    total_activity_cost = 0.0
+
+    for attraction in selected_itinerary_attractions:
+
+        if attraction["cost_amount"] is not None:
+
+            total_activity_cost += (
+                attraction["cost_amount"]
+            )
+
+    # Count attractions where admission pricing
+    # could not be determined.
+    unknown_attraction_count = sum(
+        1
+        for attraction in selected_itinerary_attractions[
+            :activities_needed
+        ]
+        if attraction["cost_status"] == "Unknown"
+    )
+
+    total_food_cost = (
+        days * daily_food_cost
+    )
+
+    total_transport_cost = (
+        days * daily_transport_cost
+    )
+
+    estimated_total = (
+        total_activity_cost
+        + total_food_cost
+        + total_transport_cost
+    )
+
+    remaining_budget = (
+        budget - estimated_total
+    )
+
+    # ======================================
+    # Summary cards
+    # ======================================
+
+    st.success(
+        f"Your itinerary for "
+        f"**{destination.title()}** is ready!"
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+
+        st.markdown(
+            '<div class="metric-card">'
+            "📍<br><b>Destination</b><br>"
+            f"{destination.title()}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col2:
+
+        st.markdown(
+            '<div class="metric-card">'
+            "📅<br><b>Duration</b><br>"
+            f"{days} days"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col3:
+
+        st.markdown(
+            '<div class="metric-card">'
+            "💰<br><b>Estimated Cost</b><br>"
+            f"${estimated_total:.2f}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    with col4:
+
+        st.markdown(
+            '<div class="metric-card">'
+            "💵<br><b>Budget Remaining</b><br>"
+            f"${remaining_budget:.2f}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if unknown_attraction_count > 0:
+
+        st.info(
+            f"ℹ️ Admission prices for "
+            f"{unknown_attraction_count} attraction(s) "
+            f"could not be verified. "
+            f"The budget estimate does not include "
+            f"those admission fees."
+        )
+
+    st.divider()
+
+    # ======================================
+    # Live weather forecast
+    # ======================================
+
+    st.header("🌤️ Live Weather Forecast")
+
+    st.caption(
+        f"Weather for {location['name']}, "
+        f"{location['country']}"
+    )
+
+    weather_columns = st.columns(
+        min(len(weather_dates), 4)
+    )
+
+    for index, weather_date in enumerate(
+        weather_dates
+    ):
+
+        column = weather_columns[
+            index % len(weather_columns)
+        ]
+
+        with column:
+
+            st.markdown(
+                f"### Day {index + 1}"
+            )
+
+            st.write(
+                f"📅 {weather_date}"
+            )
+
+            st.write(
+                f"🌡️ "
+                f"{min_temperatures[index]}°C – "
+                f"{max_temperatures[index]}°C"
+            )
+
+            st.write(
+                f"🌧️ Rain chance: "
+                f"{rain_probabilities[index]}%"
+            )
+
+            st.write(
+                weather_description(
+                    weather_codes[index]
+                )
+            )
+
+    # ======================================
+    # Weather-based advice
+    # ======================================
+
+    first_day_rain = rain_probabilities[0]
+
+    if first_day_rain >= 60:
+
+        st.warning(
+            "☔ Rain is likely on your first day. "
+            "Consider museums, cafés, galleries, "
+            "or other indoor attractions."
+        )
+
+    elif first_day_rain >= 30:
+
+        st.info(
+            "🌦️ There is a moderate chance of rain "
+            "on your first day. Consider carrying "
+            "an umbrella."
+        )
+
+    else:
+
+        st.success(
+            "☀️ Outdoor activities may be suitable "
+            "on your first day."
+        )
+
+    st.divider()
+
+    # ======================================
+    # Nearby attractions
+    # ======================================
+
+    st.subheader("📍 Nearby Attractions")
 
     if not valid_attractions:
 
@@ -1146,9 +1215,11 @@ if generate_button:
                 + activity_position
             )
 
+            # Use live attraction when available
             if attraction_index < len(
                 selected_itinerary_attractions
             ):
+
                 attraction = (
                     selected_itinerary_attractions[
                         attraction_index
@@ -1157,13 +1228,33 @@ if generate_button:
 
                 activity_name = attraction["name"]
 
+                if attraction["cost_status"] == "Free":
+
+                    cost_label = "Free"
+
+                elif attraction["cost_status"] == "Estimated":
+
+                    cost_label = (
+                        f"Estimated: "
+                        f"${attraction['cost_amount']:.2f}"
+                    )
+
+                else:
+
+                    cost_label = "Price unknown"
+
             else:
+
+                # Fall back to generic activity
                 activity_name = activity
+                cost_label = (
+                    f"Estimated: ${cost:.2f}"
+                )
 
             day_html += (
                 f'<div class="activity">'
                 f"📌 {activity_name} "
-                f"<b>(Estimated: ${cost:.2f})</b>"
+                f"<b>({cost_label})</b>"
                 f"</div>"
             )
 
@@ -1210,15 +1301,55 @@ if generate_button:
             f"DAY {day}\n"
         )
 
-        for _ in range(2):
+        for activity_position in range(2):
 
-            activity, cost = activities[
-                activity_index
-            ]
+            attraction_index = (
+                (day - 1) * 2
+                + activity_position
+            )
+
+            if attraction_index < len(
+                selected_itinerary_attractions
+            ):
+
+                attraction = (
+                    selected_itinerary_attractions[
+                        attraction_index
+                    ]
+                )
+
+                activity_name = attraction["name"]
+
+                if attraction["cost_status"] == "Free":
+
+                    cost_label = "Free"
+
+                elif attraction["cost_status"] == "Estimated":
+
+                    cost_label = (
+                        f"Estimated: "
+                        f"${attraction['cost_amount']:.2f}"
+                    )
+
+                else:
+
+                    cost_label = "Price unknown"
+
+            else:
+
+                activity, cost = activities[
+                    activity_index
+                ]
+
+                activity_name = activity
+
+                cost_label = (
+                    f"Estimated: ${cost:.2f}"
+                )
 
             itinerary_text += (
-                f"- {activity} - "
-                f"${cost:.2f}\n"
+                f"- {activity_name} - "
+                f"{cost_label}\n"
             )
 
             activity_index += 1
@@ -1236,6 +1367,16 @@ if generate_button:
         f"Remaining budget: "
         f"${remaining_budget:.2f}\n"
     )
+
+    if unknown_attraction_count > 0:
+
+        itinerary_text += (
+            "\nNote: Admission prices for "
+            f"{unknown_attraction_count} attraction(s) "
+            "could not be verified. "
+            "Those admission fees are not included "
+            "in the estimated total.\n"
+        )
 
     st.download_button(
         label="📥 Download Itinerary",
