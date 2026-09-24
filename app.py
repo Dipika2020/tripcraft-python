@@ -129,9 +129,10 @@ def get_weather(latitude, longitude, days):
 def get_nearby_attractions(latitude, longitude):
     """Find nearby attractions using OpenStreetMap."""
 
-    overpass_url = (
-        "https://overpass.kumi.systems/api/interpreter"
-    )
+    overpass_urls = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+    ]
 
     query = f"""
     [out:json][timeout:60];
@@ -177,27 +178,34 @@ def get_nearby_attractions(latitude, longitude):
     out center tags;
     """
 
-    try:
-        response = requests.post(
-            overpass_url,
-            data=query,
-            headers={
-                "User-Agent": "TripCraft/1.0 (travel planner)"
-            },
-            timeout=70,
-        )
+    for overpass_url in overpass_urls:
 
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                overpass_url,
+                data=query,
+                headers={
+                    "User-Agent": "TripCraft/1.0 (travel planner)"
+                },
+                timeout=60,
+             )
 
-        data = response.json()
+            response.raise_for_status()
 
-        return data.get("elements", [])
+            data = response.json()
 
-    except requests.RequestException as error:
-        st.error(
-            f"OpenStreetMap request failed: {error}"
-        )
-        return []
+            return data.get("elements", [])
+
+        except requests.RequestException:
+            continue
+
+
+    st.warning(
+        "Live OpenStreetMap attractions are temporarily "
+        "unavailable. Using the standard itinerary instead."
+    )
+
+    return []
 
 
 # -----------------------------
@@ -1058,11 +1066,32 @@ if generate_button:
             <h3>🌞 Day {day}</h3>
         """
 
-        for activity, cost in day_activities:
+        for activity_position, (activity, cost) in enumerate(
+            day_activities
+        ):
+
+            attraction_index = (
+                (day - 1) * 2
+                + activity_position
+            )
+
+            if attraction_index < len(
+                selected_itinerary_attractions
+            ):
+                attraction = (
+                    selected_itinerary_attractions[
+                        attraction_index
+                    ]
+                )
+
+                activity_name = attraction["name"]
+
+            else:
+                activity_name = activity
 
             day_html += (
                 f'<div class="activity">'
-                f"📌 {activity} "
+                f"📌 {activity_name} "
                 f"<b>(${cost:.2f})</b>"
                 f"</div>"
             )
