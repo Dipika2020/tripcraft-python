@@ -1092,7 +1092,7 @@ if generate_button:
             day_html += (
                 f'<div class="activity">'
                 f"📌 {activity_name} "
-                f"<b>(${cost:.2f})</b>"
+                f"<b>(Estimated: ${cost:.2f})</b>"
                 f"</div>"
             )
 
