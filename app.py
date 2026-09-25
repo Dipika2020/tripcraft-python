@@ -273,12 +273,21 @@ def get_place_category(place):
 
 def get_attraction_cost(attraction):
     """
-    Determine attraction admission cost from OpenStreetMap tags.
+    Determine attraction admission information
+    from OpenStreetMap tags.
 
     Returns:
-        status: Free / Estimated / Unknown
-        amount: numeric cost when available
-        source: explanation of where the cost came from
+        status:
+            Free
+            Price listed
+            Fee listed
+            Not listed
+
+        amount:
+            numeric price when available
+
+        source:
+            explanation of the pricing information
     """
 
     tags = attraction.get("tags", {})
@@ -291,7 +300,9 @@ def get_attraction_cost(attraction):
         return {
             "status": "Free",
             "amount": 0.0,
-            "source": "OpenStreetMap indicates no admission fee.",
+            "source": (
+                "OpenStreetMap indicates no admission fee."
+            ),
         }
 
     # Try to read a simple numeric charge
@@ -309,7 +320,7 @@ def get_attraction_cost(attraction):
             amount = float(charge_value)
 
             return {
-                "status": "Estimated",
+                "status": "Price listed",
                 "amount": amount,
                 "source": (
                     f"OpenStreetMap lists a charge of "
@@ -320,24 +331,25 @@ def get_attraction_cost(attraction):
         except ValueError:
             pass
 
-    # Explicitly paid but no price
+    # Admission fee is indicated,
+    # but no usable numeric price is available.
     if fee == "yes":
         return {
-            "status": "Unknown",
+            "status": "Fee listed",
             "amount": None,
             "source": (
-                "Admission fee is indicated, "
-                "but no price is listed."
+                "OpenStreetMap indicates an admission fee, "
+                "but does not provide a usable price."
             ),
         }
 
-    # No fee information available
+    # No admission information is available.
     return {
-        "status": "Unknown",
+        "status": "Not listed",
         "amount": None,
         "source": (
             "No admission pricing information "
-            "is available."
+            "is available in OpenStreetMap."
         ),
     }
 
@@ -830,7 +842,7 @@ if generate_button:
             interests,
         )
 
-        # Determine admission cost
+        # Determine admission information
         cost_info = get_attraction_cost(
             attraction
         )
@@ -900,8 +912,8 @@ if generate_button:
     daily_food_cost = 30
     daily_transport_cost = 10
 
-    # Only known attraction costs are included.
-    # Unknown admission prices are excluded.
+    # Only attractions with a known numeric
+    # price are included in the estimate.
     total_activity_cost = 0.0
 
     for attraction in selected_itinerary_attractions:
@@ -912,14 +924,17 @@ if generate_button:
                 attraction["cost_amount"]
             )
 
-    # Count attractions where admission pricing
-    # could not be determined.
-    unknown_attraction_count = sum(
+    # Count attractions where pricing information
+    # is unavailable or incomplete.
+    unavailable_pricing_count = sum(
         1
         for attraction in selected_itinerary_attractions[
             :activities_needed
         ]
-        if attraction["cost_status"] == "Unknown"
+        if attraction["cost_status"] in {
+            "Fee listed",
+            "Not listed",
+        }
     )
 
     total_food_cost = (
@@ -991,14 +1006,14 @@ if generate_button:
             unsafe_allow_html=True,
         )
 
-    if unknown_attraction_count > 0:
+    if unavailable_pricing_count > 0:
 
         st.info(
-            f"ℹ️ Admission prices for "
-            f"{unknown_attraction_count} attraction(s) "
-            f"could not be verified. "
-            f"The budget estimate does not include "
-            f"those admission fees."
+            f"ℹ️ Admission pricing is unavailable for "
+            f"{unavailable_pricing_count} selected "
+            f"attraction(s). "
+            f"Those admission fees are not included "
+            f"in the budget estimate."
         )
 
     st.divider()
@@ -1120,24 +1135,52 @@ if generate_button:
                     f"{attraction['distance']:.2f} km"
                 )
 
+                # -------------------------
+                # Admission information
+                # -------------------------
+
                 if attraction["cost_status"] == "Free":
 
                     st.success(
                         "💚 **Admission: Free**"
                     )
 
-                elif attraction["cost_status"] == "Estimated":
+                    st.caption(
+                        attraction["cost_source"]
+                    )
+
+                elif attraction["cost_status"] == "Price listed":
 
                     st.info(
-                        f"💰 **Admission: Estimated** — "
-                        f"{attraction['cost_source']}"
+                        f"💰 **Admission: "
+                        f"${attraction['cost_amount']:.2f}**"
+                    )
+
+                    st.caption(
+                        attraction["cost_source"]
+                    )
+
+                elif attraction["cost_status"] == "Fee listed":
+
+                    st.warning(
+                        "💰 **Admission fee indicated — "
+                        "price unavailable**"
+                    )
+
+                    st.caption(
+                        attraction["cost_source"]
                     )
 
                 else:
 
-                    st.warning(
-                        "💰 **Admission: Unknown** — "
-                        "Check the attraction's website for current pricing."
+                    st.caption(
+                        "💰 **Admission: No pricing "
+                        "information listed in OpenStreetMap**"
+                    )
+
+                    st.caption(
+                        "Check the attraction's website "
+                        "for current pricing if applicable."
                     )
 
                 map_url = (
@@ -1200,84 +1243,84 @@ if generate_button:
             activity_index:activity_index + 2
         ]
 
-        day_html = f"""
-        <div class="day-card">
+        # Native Streamlit container so
+        # the day heading renders correctly.
+        with st.container(border=True):
 
-            <h3>🌞 Day {day}</h3>
-        """
-
-        for activity_position, (activity, cost) in enumerate(
-            day_activities
-        ):
-
-            attraction_index = (
-                (day - 1) * 2
-                + activity_position
+            st.subheader(
+                f"🌞 Day {day}"
             )
 
-            # Use live attraction when available
-            if attraction_index < len(
-                selected_itinerary_attractions
-            ):
+            for activity_position, (
+                activity,
+                cost,
+            ) in enumerate(day_activities):
 
-                attraction = (
-                    selected_itinerary_attractions[
-                        attraction_index
-                    ]
+                attraction_index = (
+                    (day - 1) * 2
+                    + activity_position
                 )
 
-                activity_name = attraction["name"]
+                # Use live attraction when available
+                if attraction_index < len(
+                    selected_itinerary_attractions
+                ):
 
-                if attraction["cost_status"] == "Free":
-
-                    cost_label = "Free"
-
-                elif attraction["cost_status"] == "Estimated":
-
-                    cost_label = (
-                        f"Estimated: "
-                        f"${attraction['cost_amount']:.2f}"
+                    attraction = (
+                        selected_itinerary_attractions[
+                            attraction_index
+                        ]
                     )
+
+                    activity_name = attraction["name"]
+
+                    if attraction["cost_status"] == "Free":
+
+                        cost_label = "Free"
+
+                    elif attraction["cost_status"] == "Price listed":
+
+                        cost_label = (
+                            f"Listed: "
+                            f"${attraction['cost_amount']:.2f}"
+                        )
+
+                    elif attraction["cost_status"] == "Fee listed":
+
+                        cost_label = (
+                            "Admission fee indicated; "
+                            "price unavailable"
+                        )
+
+                    else:
+
+                        cost_label = (
+                            "No admission pricing listed"
+                        )
 
                 else:
 
-                    cost_label = "Price unknown"
+                    # Fall back to generic activity
+                    activity_name = activity
 
-            else:
+                    cost_label = (
+                        f"Estimated: ${cost:.2f}"
+                    )
 
-                # Fall back to generic activity
-                activity_name = activity
-                cost_label = (
-                    f"Estimated: ${cost:.2f}"
+                st.markdown(
+                    f"📌 {activity_name} "
+                    f"**({cost_label})**"
                 )
 
-            day_html += (
-                f'<div class="activity">'
-                f"📌 {activity_name} "
-                f"<b>({cost_label})</b>"
-                f"</div>"
+            st.markdown(
+                f"🍽️ Food estimate "
+                f"**(${daily_food_cost:.2f})**"
             )
 
-        day_html += (
-            f'<div class="activity">'
-            f"🍽️ Food estimate "
-            f"<b>(${daily_food_cost:.2f})</b>"
-            f"</div>"
-        )
-
-        day_html += (
-            f'<div class="activity">'
-            f"🚗 Transport estimate "
-            f"<b>(${daily_transport_cost:.2f})</b>"
-            f"</div>"
-        )
-
-        day_html += "</div>"
-
-        st.markdown(
-            day_html,
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+                f"🚗 Transport estimate "
+                f"**(${daily_transport_cost:.2f})**"
+            )
 
         activity_index += 2
 
@@ -1324,16 +1367,25 @@ if generate_button:
 
                     cost_label = "Free"
 
-                elif attraction["cost_status"] == "Estimated":
+                elif attraction["cost_status"] == "Price listed":
 
                     cost_label = (
-                        f"Estimated: "
+                        f"Listed: "
                         f"${attraction['cost_amount']:.2f}"
+                    )
+
+                elif attraction["cost_status"] == "Fee listed":
+
+                    cost_label = (
+                        "Admission fee indicated; "
+                        "price unavailable"
                     )
 
                 else:
 
-                    cost_label = "Price unknown"
+                    cost_label = (
+                        "No admission pricing listed"
+                    )
 
             else:
 
@@ -1368,12 +1420,12 @@ if generate_button:
         f"${remaining_budget:.2f}\n"
     )
 
-    if unknown_attraction_count > 0:
+    if unavailable_pricing_count > 0:
 
         itinerary_text += (
-            "\nNote: Admission prices for "
-            f"{unknown_attraction_count} attraction(s) "
-            "could not be verified. "
+            "\nNote: Admission pricing is unavailable "
+            f"for {unavailable_pricing_count} selected "
+            "attraction(s). "
             "Those admission fees are not included "
             "in the estimated total.\n"
         )
