@@ -431,17 +431,159 @@ def calculate_attraction_score(
 def select_itinerary_attractions(
     attractions,
     days,
+    budget,
 ):
     """
-    Select live attractions for the itinerary.
+    Select attractions for the itinerary using a
+    simple rule-based scoring system.
+
+    Considers:
+    - attraction relevance score
+    - distance
+    - admission cost
+    - category diversity
+    - available budget
 
     Returns up to two attractions per day.
     """
 
     required_attractions = days * 2
 
-    return attractions[:required_attractions]
+    if not attractions:
+        return []
 
+    # Work on a copy so the original attraction
+    # list remains unchanged.
+    candidates = attractions.copy()
+
+    def itinerary_score(attraction):
+        score = attraction["score"]
+
+        # Prefer closer attractions.
+        distance = attraction["distance"]
+
+        if distance <= 3:
+            score += 3
+        elif distance <= 6:
+            score += 1
+        elif distance > 8:
+            score -= 2
+
+        # Prefer free attractions when the budget is limited.
+        if budget <= 100:
+            if attraction["cost_status"] == "Free":
+                score += 4
+            elif attraction["cost_status"] == "Price listed":
+                if attraction["cost_amount"] <= 15:
+                    score += 2
+
+        return score
+
+    # Rank attractions using the itinerary-specific score.
+    candidates.sort(
+        key=lambda attraction: (
+            -itinerary_score(attraction),
+            attraction["distance"],
+        )
+    )
+
+    selected = []
+    category_counts = {}
+
+    for attraction in candidates:
+        category = attraction["category"]
+
+        # Avoid selecting too many attractions
+        # from the same category.
+        category_count = category_counts.get(category, 0)
+
+        if category_count >= 2:
+            continue
+
+        selected.append(attraction)
+        category_counts[category] = category_count + 1
+
+        if len(selected) >= required_attractions:
+            break
+
+    # If category diversity prevented us from filling
+    # the itinerary, use the remaining best candidates.
+    if len(selected) < required_attractions:
+        for attraction in candidates:
+            if attraction not in selected:
+                selected.append(attraction)
+
+            if len(selected) >= required_attractions:
+                break
+
+    return selected
+
+def build_daily_itinerary(
+    attractions,
+    days,
+):
+    """
+    Distribute selected attractions across the trip days.
+
+    Attempts to keep nearby attractions together while
+    maintaining a balanced number of attractions per day.
+    """
+
+    if not attractions or days <= 0:
+        return []
+
+    daily_itinerary = [
+        []
+        for _ in range(days)
+    ]
+
+    remaining = attractions.copy()
+
+    # Start each day with one attraction.
+    # This ensures the trip is spread across all days.
+    for day_index in range(days):
+
+        if not remaining:
+            break
+
+        attraction = remaining.pop(0)
+
+        daily_itinerary[day_index].append(
+            attraction
+        )
+
+    # Add a second attraction to each day.
+    # Prefer attractions that are geographically
+    # close to the first attraction of that day.
+    for day_index in range(days):
+
+        if not remaining:
+            break
+
+        if len(daily_itinerary[day_index]) >= 2:
+            continue
+
+        first_attraction = daily_itinerary[
+            day_index
+        ][0]
+
+        closest_attraction = min(
+            remaining,
+            key=lambda attraction: abs(
+                attraction["distance"]
+                - first_attraction["distance"]
+            ),
+        )
+
+        daily_itinerary[day_index].append(
+            closest_attraction
+        )
+
+        remaining.remove(
+            closest_attraction
+        )
+
+    return daily_itinerary
 
 # -----------------------------
 # Distance calculation
@@ -889,11 +1031,11 @@ if generate_button:
     # Select itinerary attractions
     # -----------------------------
 
-    selected_itinerary_attractions = (
-        select_itinerary_attractions(
+    selected_itinerary_attractions = select_itinerary_attractions(
             valid_attractions,
             days,
-        )
+            budget,
+        
     )
 
     # ======================================
@@ -953,6 +1095,15 @@ if generate_button:
 
     remaining_budget = (
         budget - estimated_total
+    )
+
+    # ======================================
+    # Build daily itinerary
+    # ======================================
+
+    daily_itinerary = build_daily_itinerary(
+        selected_itinerary_attractions,
+        days,
     )
 
     # ======================================
@@ -1237,92 +1388,67 @@ if generate_button:
 
     activity_index = 0
 
-    for day in range(1, days + 1):
+    for day_index, day_attractions in enumerate(
+        daily_itinerary,
+        start=1,
+    ):
 
-        day_activities = activities[
-            activity_index:activity_index + 2
-        ]
+        st.markdown(
+            f"### 🌞 Day {day_index}"
+        )
 
-        # Native Streamlit container so
-        # the day heading renders correctly.
-        with st.container(border=True):
-
-            st.subheader(
-                f"🌞 Day {day}"
+        if not day_attractions:
+            st.info(
+                "No attractions were available "
+                "for this day."
             )
+        else:
+            for attraction in day_attractions:
 
-            for activity_position, (
-                activity,
-                cost,
-            ) in enumerate(day_activities):
+                if attraction["cost_status"] == "Free":
+                    cost_label = "Free"
 
-                attraction_index = (
-                    (day - 1) * 2
-                    + activity_position
-                )
-
-                # Use live attraction when available
-                if attraction_index < len(
-                    selected_itinerary_attractions
+                elif (
+                    attraction["cost_status"]
+                    == "Price listed"
                 ):
-
-                    attraction = (
-                        selected_itinerary_attractions[
-                            attraction_index
-                        ]
+                    cost_label = (
+                        f"Listed: "
+                        f"${attraction['cost_amount']:.2f}"
                     )
 
-                    activity_name = attraction["name"]
-
-                    if attraction["cost_status"] == "Free":
-
-                        cost_label = "Free"
-
-                    elif attraction["cost_status"] == "Price listed":
-
-                        cost_label = (
-                            f"Listed: "
-                            f"${attraction['cost_amount']:.2f}"
-                        )
-
-                    elif attraction["cost_status"] == "Fee listed":
-
-                        cost_label = (
-                            "Admission fee indicated; "
-                            "price unavailable"
-                        )
-
-                    else:
-
-                        cost_label = (
-                            "No admission pricing listed"
-                        )
+                elif (
+                    attraction["cost_status"]
+                    == "Fee listed"
+                ):
+                    cost_label = (
+                        "Admission fee indicated; "
+                        "price unavailable"
+                    )
 
                 else:
-
-                    # Fall back to generic activity
-                    activity_name = activity
-
                     cost_label = (
-                        f"Estimated: ${cost:.2f}"
+                        "No admission pricing listed"
                     )
 
-                st.markdown(
-                    f"📌 {activity_name} "
-                    f"**({cost_label})**"
+                st.write(
+                    f"📌 **{attraction['name']}** "
+                    f"({cost_label})"
                 )
 
-            st.markdown(
-                f"🍽️ Food estimate "
-                f"**(${daily_food_cost:.2f})**"
-            )
+                st.caption(
+                    f"📍 {attraction['distance']:.2f} km away"
+                )
 
-            st.markdown(
-                f"🚗 Transport estimate "
-                f"**(${daily_transport_cost:.2f})**"
-            )
+        st.write(
+            f"🍽️ Food estimate "
+            f"(${daily_food_cost:.2f})"
+        )
 
-        activity_index += 2
+        st.write(
+            f"🚗 Transport estimate "
+            f"(${daily_transport_cost:.2f})"
+        )
 
     # -----------------------------
     # Download itinerary
