@@ -16,20 +16,23 @@ The home page lets users select a destination, trip duration, budget, and travel
   <img src="screenshots/dashboard.png" alt="TripCraft Home Page" width="700"/>
 </p>
 
-### 2. Personalized Travel Itinerary
-
-Displays a day-by-day itinerary with nearby attractions tailored to the user's interests.
-
-<p align="center">
-  <img src="screenshots/itinerary.png" alt="Generated Travel Itinerary" width="700"/>
-</p>
-
-### 3. Weather Forecast & Budget Overview
+### 2. Weather Forecast & Budget Overview
 
 Shows the weather forecast and estimated expenses to help users plan their trip.
 
 <p align="center">
   <img src="screenshots/weather.png" alt="Weather Forecast and Budget" width="700"/>
+  <img src="screenshots/nearby loc.png" alt="Generated Travel Itinerary" width="700"/>
+
+</p>
+
+### 3. Personalized Travel Itinerary
+
+Displays a day-by-day itinerary with nearby attractions tailored to the user's interests.
+
+<p align="center">
+  <img src="screenshots/itinerary.png" alt="Generated Travel Itinerary" width="700"/>
+
 </p>
 
 ## 🌍 Project Overview
